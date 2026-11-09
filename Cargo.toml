@@ -1,7 +1,7 @@
 [package]
 name = "rainmill-legal"
 version = "0.1.0"
-description = "Rainmill Legal: versioned legal documents with drafts, published versions, history and acceptances, for Laterite"
+description = "Versioned legal documents for Laterite: drafts with undo, published versions with archival PDFs, public history and diffs, acceptances and change notices"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/rainmill/legal-plugin"
