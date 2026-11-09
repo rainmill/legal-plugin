@@ -160,3 +160,26 @@ async fn the_page_shows_the_version_in_force_its_history_and_the_changes() {
     assert_eq!(missing["missing"], "9.9");
     assert!(render(&reg, &missing).contains("There is no version 9.9"));
 }
+
+#[tokio::test]
+async fn a_version_lists_its_sections() {
+    let (db, _guard, reg) = setup().await;
+    let id = set_draft(
+        &db,
+        "privacy",
+        "## Who we are\n\nAcme.\n\n## Your *rights*\n\nAsk.",
+    )
+    .await;
+    let input = store::Publish {
+        number: String::new(),
+        effective: "2026-01-01".into(),
+        summary: "First".into(),
+        material: false,
+    };
+    store::publish(&db, id, &input, "ada").await.unwrap();
+    let data = run(&db, &reg, &[]).await;
+    let toc = data["version"]["toc"].as_array().unwrap();
+    assert_eq!(toc.len(), 2);
+    assert_eq!(toc[0]["id"], "who-we-are");
+    assert_eq!(toc[1]["title"], "Your rights");
+}

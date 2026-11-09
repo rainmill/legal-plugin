@@ -4,7 +4,8 @@
 //!
 //! The page's URL parameters choose what it shows: `version` names a version;
 //! `from` and `to` (each a version number or a `YYYY-MM-DD` date, a date meaning
-//! the version in force that day) compare two. A theme gives them whatever URL
+//! the version in force that day) compare two. A version carries `toc`, its
+//! sections by heading, for an "On this page" list. A theme gives them whatever URL
 //! shape it likes: `/legal/:slug/:version?`, `/legal/:slug/compare/:from/:to`.
 
 use laterite_web::theme::component::{
@@ -154,17 +155,51 @@ impl Component for DocumentComponent {
                     .unwrap_or_default(),
                 None => String::new(),
             };
+            let html = laterite_core::markdown::render(&v.body);
             data["version"] = json!({
                 "number": v.number,
                 "effective": store::long_date(&v.effective_at),
                 "summary": v.summary,
-                "html": laterite_core::markdown::render(&v.body),
+                "toc": contents(&html),
+                "html": html,
                 "pdf": pdf,
                 "current": Some(v.id) == current,
             });
         }
         Ok(ComponentOutput::data(data))
     }
+}
+
+/// The document's sections, for an "On this page" list: each second-level
+/// heading's id and words, from the rendered HTML.
+fn contents(html: &str) -> Vec<Value> {
+    let mut out = Vec::new();
+    let mut rest = html;
+    while let Some(start) = rest.find("<h2 id=\"") {
+        let after = &rest[start + 8..];
+        let Some(end_id) = after.find('"') else { break };
+        let id = &after[..end_id];
+        let Some(open_end) = after.find('>') else {
+            break;
+        };
+        let Some(close) = after.find("</h2>") else {
+            break;
+        };
+        let inner = &after[open_end + 1..close];
+        let mut text = String::new();
+        let mut in_tag = false;
+        for c in inner.chars() {
+            match c {
+                '<' => in_tag = true,
+                '>' => in_tag = false,
+                _ if !in_tag => text.push(c),
+                _ => {}
+            }
+        }
+        out.push(json!({ "id": id, "title": text.trim() }));
+        rest = &after[close..];
+    }
+    out
 }
 
 /// A version by number, or the one in force at the end of a `YYYY-MM-DD` day.
