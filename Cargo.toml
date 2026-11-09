@@ -1,0 +1,37 @@
+[package]
+name = "rainmill-legal"
+version = "0.1.0"
+description = "Rainmill Legal: versioned legal documents with drafts, published versions, history and acceptances, for Laterite"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/rainmill/legal-plugin"
+publish = false
+
+# Marks this crate as a Laterite plugin and names the module it registers.
+[package.metadata.laterite]
+plugin = "rainmill.legal"
+
+[dependencies]
+# Laterite crates are version-only; the building workspace patches them to the
+# local checkout until Laterite publishes.
+laterite-core = "0.9"
+laterite-admin = "0.9"
+# PDFs of drafts and published versions, set in a PDF layout.
+rainmill-pdf = "0.1"
+# A version's stored PDF is a media record linked to it.
+laterite-media = "0.9"
+sea-query = { version = "0.32", features = ["derive"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "any"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# The hash a published version carries, the same algorithm the media library uses.
+blake3 = "1"
+
+[dev-dependencies]
+laterite-core = { version = "0.9", features = ["sqlite", "postgres", "testing"] }
+laterite-auth = "0.9"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tower = { version = "0.5", features = ["util"] }
+lopdf = { version = "0.47", default-features = false }

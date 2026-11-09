@@ -1,0 +1,39 @@
+entity: legal_documents
+path: /documents
+title: Documents
+permission: rainmill.legal.edit
+menu: { under: rainmill.legal, order: 1 }
+list:
+  creatable: true
+  deletable: true
+  order_by: title
+  search: { prompt: Search documents }
+  columns:
+    title: { searchable: true }
+    slug: { searchable: true, label: Address }
+    updated_at: { type: datetime, label: Draft saved }
+form:
+  title: Document
+  timestamps: true
+  actions:
+    - { label: Versions, action: "rainmill/legal/tools/documents/{id}/versions", method: get }
+    - { label: Publish new version, action: "rainmill/legal/tools/documents/{id}/publish", method: get, permission: rainmill.legal.publish }
+  fields:
+    title: { span: 1/2, rules: [required, { max_length: 160 }] }
+    slug: { span: 1/4, label: Address, rules: [required, { max_length: 80 }], help: 'Such as privacy; the page and code refer to it.' }
+    numbering:
+      span: 1/4
+      type: select
+      options:
+        - { value: major_minor, label: 'Major and minor (2.0, 2.1)' }
+        - { value: date, label: 'Effective date (2026-11-09)' }
+        - { value: free, label: Free text }
+    description: { type: textarea, rows: 2, span: 3/4 }
+    layout_id: { span: 1/4, type: reference, source: rainmill.pdf.layouts, label: PDF layout, help: 'The default layout when empty.' }
+    body:
+      type: markdown
+      label: Draft
+      preview: side
+      preview_url: rainmill/legal/tools/preview
+      rows: 28
+      help: 'Saving keeps a draft. Nothing here is public until a version is published.'
