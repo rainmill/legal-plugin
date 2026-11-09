@@ -523,11 +523,24 @@ async fn versions_page(cx: &Cx, id: i64, shell: Shell) -> Response {
     for v in &versions {
         let pdf = match v.pdf_media_id {
             Some(media) => match laterite_media::record::find(cx.ctx.db(), media).await {
-                Ok(Some(rec)) => format!(
-                    r#"<a href="{}" target="_blank" rel="noopener">{}</a>"#,
-                    escape(&laterite_admin::medialib::file_url(&rec)),
-                    escape(&shell.t("PDF"))
-                ),
+                Ok(Some(rec)) => {
+                    let again = if shell.allows(PUBLISH) {
+                        laterite_admin::ui::Button::post(
+                            t!("Render again"),
+                            format!("{}/versions/{}/pdf", cx.tools(), v.id),
+                        )
+                        .small()
+                        .render(&shell)
+                        .into_string()
+                    } else {
+                        String::new()
+                    };
+                    format!(
+                        r#"<a href="{}" target="_blank" rel="noopener">{}</a> {again}"#,
+                        escape(&laterite_admin::medialib::file_url(&rec)),
+                        escape(&shell.t("PDF"))
+                    )
+                }
                 _ => String::new(),
             },
             None if shell.allows(PUBLISH) => laterite_admin::ui::Button::post(

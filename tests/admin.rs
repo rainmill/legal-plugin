@@ -276,6 +276,10 @@ async fn a_draft_is_previewed_published_numbered_and_stored() {
     assert!(
         html.contains("2.0") && html.contains("We now collect email") && html.contains("In force")
     );
+    assert!(
+        html.contains("Render again"),
+        "a stored PDF can be set again"
+    );
     let _ = std::fs::remove_dir_all(storage);
 }
 

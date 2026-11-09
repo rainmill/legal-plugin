@@ -59,7 +59,7 @@ Free text | Whatever the author types.
 
 Publishing writes a version that never changes, with a BLAKE3 hash of its text, renders it as a PDF/A file in the document's layout, stores that in the media library linked to the version, and writes an audit entry (`rainmill.legal.version.publish`). Refused: an empty draft, a draft unchanged since the latest version, a number already used, no summary. If the PDF cannot be stored, the version is still published and **Render PDF** on the Versions page tries again.
 
-**Versions** lists every version newest first: number, effective date, who published it and when, what changed, In force or Scheduled, Material, and its PDF.
+**Versions** lists every version newest first: number, effective date, who published it and when, what changed, In force or Scheduled, Material, and its PDF. **Render again** sets a stored PDF in the document's current layout; the text stays as published.
 
 ```rust
 use rainmill_legal::store;

@@ -9,4 +9,5 @@ bump is breaking and a patch is additive.
 
 ### Added
 
+- **Render again** on the Versions page sets a stored PDF in the document's current layout.
 - First release. Versioned legal documents for Laterite: drafts with undo, published versions with archival PDFs, public history and diffs, acceptances and change notices.
