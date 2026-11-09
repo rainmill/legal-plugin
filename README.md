@@ -22,6 +22,24 @@ Numbering | How versions are numbered (below).
 PDF layout | A layout from PDF Templates; the default layout when empty.
 Draft | Markdown, taken verbatim: `{{` stays as written.
 
+## Draft history and undo
+
+Every save of a document keeps its state (title, description, layout, draft), the latest fifty, with who saved it. None of it is public.
+
+Action | Does
+--- | ---
+**Undo last save** | Brings back the draft before the latest save; again, the one before that, and on. Asks first, since unsaved edits in the editor go too.
+**Draft history** | Every kept state newest first, with only the paragraphs each save changed, marked word by word.
+**Restore** | Brings back a chosen state.
+
+An undo or restore is kept as a state of its own, so nothing is lost by using them, and a save is never a version: only **Publish new version** makes one.
+
+```rust
+let states = rainmill_legal::drafts::list(&db, doc.id).await?;
+rainmill_legal::drafts::undo(&db, doc.id, "ada").await?;
+rainmill_legal::drafts::restore(&db, doc.id, states[2].id, "ada").await?;
+```
+
 ## Publishing
 
 **Publish new version** shows the changes since the latest version, then asks for:

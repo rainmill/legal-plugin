@@ -433,3 +433,81 @@ async fn acceptances_record_the_version_in_force_and_changes_reach_those_behind(
     assert_eq!(status, StatusCode::OK);
     let _ = std::fs::remove_dir_all(storage);
 }
+
+/// Every save is kept; Undo steps back one save per click, recording itself;
+/// the history shows each save's changes and Restore brings any back.
+#[tokio::test]
+async fn saves_are_kept_undone_one_at_a_time_and_restorable() {
+    let (db, _guard, app, storage) = setup().await;
+    let root = session(&db, "root", &[]).await;
+    send(
+        &app,
+        post(
+            &format!("/admin{BASE}/documents/new"),
+            &root,
+            "title=Terms&slug=terms&numbering=major_minor&body=One.",
+        ),
+    )
+    .await;
+    let doc = store::document_by_slug(&db, "terms")
+        .await
+        .unwrap()
+        .unwrap();
+    let edit = format!("/admin{BASE}/documents/{}/edit", doc.id);
+    for body in ["Two.", "Three."] {
+        let form = format!("title=Terms&slug=terms&numbering=major_minor&body={body}");
+        send(&app, post(&edit, &root, &form)).await;
+    }
+    let body = || async { store::document(&db, doc.id).await.unwrap().unwrap().body };
+    assert_eq!(body().await, "Three.");
+
+    let undo = format!("/admin{BASE}/tools/documents/{}/undo", doc.id);
+    let (status, _, _) = send(&app, post(&undo, &root, "")).await;
+    assert!(status.is_redirection(), "{status}");
+    assert_eq!(body().await, "Two.", "one save back");
+    send(&app, post(&undo, &root, "")).await;
+    assert_eq!(body().await, "One.", "and another");
+    send(&app, post(&undo, &root, "")).await;
+    assert_eq!(body().await, "One.", "nothing earlier");
+
+    let (status, _, html) = send(
+        &app,
+        get(
+            &format!("/admin{BASE}/tools/documents/{}/drafts", doc.id),
+            &root,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let html = String::from_utf8_lossy(&html).to_string();
+    assert!(
+        html.contains("Undo") && html.contains("Current") && html.contains("<ins>"),
+        "{html}"
+    );
+
+    let three = rainmill_legal::drafts::list(&db, doc.id)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|r| r.body == "Three.")
+        .unwrap();
+    let (status, _, _) = send(
+        &app,
+        post(
+            &format!(
+                "/admin{BASE}/tools/documents/{}/drafts/{}/restore",
+                doc.id, three.id
+            ),
+            &root,
+            "",
+        ),
+    )
+    .await;
+    assert!(status.is_redirection(), "{status}");
+    assert_eq!(body().await, "Three.");
+    assert!(
+        store::versions(&db, doc.id).await.unwrap().is_empty(),
+        "no save is a version"
+    );
+    let _ = std::fs::remove_dir_all(storage);
+}

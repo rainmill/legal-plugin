@@ -8,6 +8,7 @@
 #![warn(missing_docs)]
 
 pub mod admin;
+pub mod drafts;
 mod listener;
 pub mod migrations;
 mod notify;

@@ -160,6 +160,44 @@ impl Screen for Tools {
                 ),
             )
             .route_layer(laterite_admin::axum::middleware::from_fn(guarded(NOTIFY)));
+        let (undo_cx, drafts_cx, restore_cx) = (cx.clone(), cx.clone(), cx.clone());
+        let drafting =
+            Router::new()
+                .route(
+                    "/documents/{id}/undo",
+                    post(
+                        move |Path(id): Path<i64>,
+                              Extension(shell): Extension<Shell>,
+                              Extension(session): Extension<SessionHandle>,
+                              headers: HeaderMap| {
+                            let cx = undo_cx.clone();
+                            async move { undo(&cx, id, shell, session, headers).await }
+                        },
+                    ),
+                )
+                .route(
+                    "/documents/{id}/drafts",
+                    get(
+                        move |Path(id): Path<i64>, Extension(shell): Extension<Shell>| {
+                            let cx = drafts_cx.clone();
+                            async move { drafts_page(&cx, id, shell).await }
+                        },
+                    ),
+                )
+                .route(
+                    "/documents/{id}/drafts/{revision}/restore",
+                    post(
+                        move |Path((id, revision)): Path<(i64, i64)>,
+                              Extension(shell): Extension<Shell>,
+                              Extension(session): Extension<SessionHandle>,
+                              headers: HeaderMap| {
+                            let cx = restore_cx.clone();
+                            async move {
+                                restore_draft(&cx, id, revision, shell, session, headers).await
+                            }
+                        },
+                    ),
+                );
         let publishing = Router::new()
             .route(
                 "/documents/{id}/publish",
@@ -212,6 +250,7 @@ impl Screen for Tools {
             )
             .merge(publishing)
             .merge(notifying)
+            .merge(drafting)
     }
 }
 
@@ -561,6 +600,189 @@ async fn versions_page(cx: &Cx, id: i64, shell: Shell) -> Response {
     shell.page_with(head, Markup::raw_unchecked(table))
 }
 
+/// Steps the draft back one save and returns to the editor.
+async fn undo(
+    cx: &Cx,
+    id: i64,
+    shell: Shell,
+    session: SessionHandle,
+    headers: HeaderMap,
+) -> Response {
+    match crate::drafts::undo(cx.ctx.db(), id, shell.username()).await {
+        Ok(Some(rev)) => session.push_flash(
+            FlashLevel::Success,
+            laterite_core::Text::dynamic(format!(
+                "Undone: the draft is back to the save of {} by {}. Undo again to step further back.",
+                shell.datetime(&rev.created_at),
+                if rev.author.is_empty() { "an unknown author" } else { &rev.author }
+            )),
+        ),
+        Ok(None) => session.push_flash(FlashLevel::Info, t!("Nothing earlier to undo.")),
+        Err(e) => return failed(e),
+    }
+    redirect(cx.edit(id), &headers)
+}
+
+/// Brings back a chosen kept state of the draft.
+async fn restore_draft(
+    cx: &Cx,
+    id: i64,
+    revision: i64,
+    shell: Shell,
+    session: SessionHandle,
+    headers: HeaderMap,
+) -> Response {
+    match crate::drafts::restore(cx.ctx.db(), id, revision, shell.username()).await {
+        Ok(true) => session.push_flash(
+            FlashLevel::Success,
+            t!("Restored. The draft you replaced stays in the history."),
+        ),
+        Ok(false) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => return failed(e),
+    }
+    redirect(cx.edit(id), &headers)
+}
+
+/// The draft's kept states, newest first, each with what changed from the one
+/// before and a Restore. Private to the admin; never a published version.
+async fn drafts_page(cx: &Cx, id: i64, shell: Shell) -> Response {
+    let doc = match store::document(cx.ctx.db(), id).await {
+        Ok(Some(d)) => d,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => return failed(e),
+    };
+    let revisions = match crate::drafts::list(cx.ctx.db(), id).await {
+        Ok(r) => r,
+        Err(e) => return failed(e),
+    };
+    let mut body = String::from("<p class=\"lat-note\">");
+    body.push_str(&escape(&shell.t(
+        "Every save of the draft is kept here, the latest fifty. None of it is public; only a published version is.",
+    )));
+    body.push_str("</p>");
+    if revisions.is_empty() {
+        body.push_str(&format!(
+            "<p class=\"lat-note\">{}</p>",
+            escape(&shell.t("Nothing saved yet."))
+        ));
+    }
+    for (i, rev) in revisions.iter().enumerate() {
+        body.push_str("<section class=\"lat-card\" style=\"padding:16px 20px;margin-bottom:14px\"><div style=\"display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px\">");
+        body.push_str(&format!(
+            "<strong>{}</strong><span class=\"lat-muted\">{}</span>",
+            escape(&shell.datetime(&rev.created_at)),
+            escape(&rev.author)
+        ));
+        match rev.kind {
+            crate::drafts::Kind::Undo => body.push_str(
+                &laterite_admin::ui::Badge::new(t!("Undo"))
+                    .render(&shell)
+                    .into_string(),
+            ),
+            crate::drafts::Kind::Restore => body.push_str(
+                &laterite_admin::ui::Badge::new(t!("Restore"))
+                    .render(&shell)
+                    .into_string(),
+            ),
+            crate::drafts::Kind::Save => {}
+        }
+        if i == 0 {
+            body.push_str(
+                &laterite_admin::ui::Badge::new(t!("Current"))
+                    .render(&shell)
+                    .into_string(),
+            );
+        } else {
+            body.push_str("<span style=\"margin-left:auto\">");
+            body.push_str(
+                &laterite_admin::ui::Button::post(
+                    t!("Restore"),
+                    format!("{}/documents/{id}/drafts/{}/restore", cx.tools(), rev.id),
+                )
+                .small()
+                .render(&shell)
+                .into_string(),
+            );
+            body.push_str("</span>");
+        }
+        body.push_str("</div>");
+        match revisions.get(i + 1) {
+            Some(before) => {
+                let mut changes = Vec::new();
+                if before.title != rev.title {
+                    changes.push(format!(
+                        "<p><strong>{}</strong> <del>{}</del> <ins>{}</ins></p>",
+                        escape(&shell.t("Title")),
+                        escape(&before.title),
+                        escape(&rev.title)
+                    ));
+                }
+                if before.description != rev.description {
+                    changes.push(format!(
+                        "<p><strong>{}</strong> {}</p>",
+                        escape(&shell.t("Description")),
+                        word_diff(&before.description, &rev.description)
+                    ));
+                }
+                if before.layout_id != rev.layout_id {
+                    changes.push(format!(
+                        "<p><strong>{}</strong> {}</p>",
+                        escape(&shell.t("PDF layout")),
+                        escape(&shell.t("changed"))
+                    ));
+                }
+                if before.body != rev.body {
+                    changes.push(format!(
+                        "<div class=\"rm-legal-diff\">{}</div>",
+                        changed_only(&word_diff(&before.body, &rev.body))
+                    ));
+                }
+                if changes.is_empty() {
+                    body.push_str(&format!(
+                        "<p class=\"lat-muted\">{}</p>",
+                        escape(&shell.t("Saved with no changes."))
+                    ));
+                } else {
+                    body.push_str(&changes.join(""));
+                }
+            }
+            None => body.push_str(&format!(
+                "<p class=\"lat-muted\">{}</p>",
+                escape(&shell.t("The earliest state kept."))
+            )),
+        }
+        body.push_str("</section>");
+    }
+    shell.page_with(
+        PageHead::new(laterite_core::Text::dynamic(format!(
+            "{}: {}",
+            shell.t("Draft history"),
+            doc.title
+        )))
+        .back(t!("Back"), cx.edit(id))
+        .assets(&[DIFF_CSS]),
+        Markup::raw_unchecked(body),
+    )
+}
+
+/// The paragraphs of a diff that hold a change, `…` between them; the whole
+/// diff when a change spans paragraphs, so no mark is cut in two.
+fn changed_only(diff: &str) -> String {
+    let chunks: Vec<&str> = diff.split("\n\n").collect();
+    let balanced = chunks.iter().all(|c| {
+        c.matches("<ins>").count() == c.matches("</ins>").count()
+            && c.matches("<del>").count() == c.matches("</del>").count()
+    });
+    if !balanced {
+        return diff.to_string();
+    }
+    let kept: Vec<&str> = chunks
+        .into_iter()
+        .filter(|c| c.contains("<ins>") || c.contains("<del>"))
+        .collect();
+    kept.join("\n\n…\n\n")
+}
+
 /// The diff stylesheet, by its asset key.
 pub const DIFF_CSS: &str = "rainmill-legal-diff.css";
 
@@ -598,4 +820,22 @@ fn pane_message(message: &str) -> Response {
         .replace('<', "&lt;")
         .replace('>', "&gt;");
     Html(format!("<p class=\"lat-markdown__empty\">{escaped}</p>")).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn only_changed_paragraphs_are_shown() {
+        let diff = "## A\n\nSame.\n\nWe never sell <ins>or rent</ins> data.\n\nEnd.";
+        assert_eq!(
+            super::changed_only(diff),
+            "We never sell <ins>or rent</ins> data."
+        );
+        let spanning = "One <del>two\n\nthree</del> four.";
+        assert_eq!(
+            super::changed_only(spanning),
+            spanning,
+            "a mark across paragraphs keeps the whole"
+        );
+    }
 }

@@ -16,6 +16,8 @@ form:
   title: Document
   timestamps: true
   actions:
+    - { label: Undo last save, action: "rainmill/legal/tools/documents/{id}/undo", confirm: 'Go back to the draft before the last save? Changes in the editor that are not saved yet are lost too.' }
+    - { label: Draft history, action: "rainmill/legal/tools/documents/{id}/drafts", method: get }
     - { label: Versions, action: "rainmill/legal/tools/documents/{id}/versions", method: get }
     - { label: Publish new version, action: "rainmill/legal/tools/documents/{id}/publish", method: get, permission: rainmill.legal.publish }
     - { label: Send changes, action: "rainmill/legal/tools/documents/{id}/notify", method: get, permission: rainmill.legal.notify }
