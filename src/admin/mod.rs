@@ -101,10 +101,8 @@ fn guarded(
 
 impl Screen for Tools {
     fn mount(&self, ctx: &RouteCtx) -> Router {
-        let library =
-            laterite_admin::medialib::library_driver(ctx.plugin_defined(), ctx.storage_dir());
         let pdf = Pdf::new(ctx.db().clone(), ctx.plugin_defined())
-            .disk(laterite_admin::medialib::DISK, library);
+            .library(ctx.plugin_defined(), ctx.storage_dir());
         let cx = Cx {
             ctx: ctx.clone(),
             pdf,
