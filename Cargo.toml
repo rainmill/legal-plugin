@@ -20,6 +20,8 @@ laterite-admin = "0.9"
 rainmill-pdf = "0.1"
 # A version's stored PDF is a media record linked to it.
 laterite-media = "0.9"
+# The site component that shows a document, its history and its changes.
+laterite-web = "0.9"
 sea-query = { version = "0.32", features = ["derive"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "any"] }
 serde = { version = "1", features = ["derive"] }
@@ -35,3 +37,4 @@ laterite-auth = "0.9"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tower = { version = "0.5", features = ["util"] }
 lopdf = { version = "0.47", default-features = false }
+minijinja = { version = "3", features = ["serde"] }

@@ -52,6 +52,39 @@ let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
 let current = store::in_force(&versions, &now);
 ```
 
+## On the site
+
+Attach the `rainmill.legal.document` component to pages whose URLs carry the parameters it reads:
+
+```ini
+# pages/legal.htm
+url = "/legal/:slug/:version?"
+
+[rainmill.legal.document legal]
+slug = "{{ :slug }}"
+url = "/legal/{slug}"
+==
+{{ component("legal") }}
+```
+
+```ini
+# pages/legal-compare.htm
+url = "/legal/:slug/compare/:from/:to"
+
+[rainmill.legal.document legal]
+slug = "{{ :slug }}"
+==
+{{ component("legal") }}
+```
+
+URL parameter | Shows
+--- | ---
+none | The version in force, with its PDF link
+`version` | That version (`/legal/privacy/1.0`)
+`from`, `to` | What changed between them: each a version number or a `YYYY-MM-DD` date, a date meaning the version in force that day, with every version's summary in between
+
+The history lists every version newest first, marking the one in force and any scheduled for later. The data is `component.document`, `.version` (number, effective, summary, html, pdf), `.history`, `.compare` (from, to, html, changes) and `.missing` (a version the URL named that does not exist), for a theme that writes its own markup.
+
 Permission | Allows
 --- | ---
 `rainmill.legal.edit` | Opening documents and saving drafts

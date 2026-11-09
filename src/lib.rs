@@ -10,6 +10,7 @@
 pub mod admin;
 mod listener;
 pub mod migrations;
+mod site;
 pub mod store;
 
 use std::sync::Arc;
@@ -57,6 +58,11 @@ impl Module for LegalModule {
         }
         registry.add_screen(admin::screen());
         registry.add_asset(admin::DIFF_CSS, admin::diff_css());
+        registry.add(laterite_web::theme::component::ComponentReg::new(
+            "rainmill.legal.document",
+            "Legal document",
+            Arc::new(site::DocumentComponent),
+        ));
         registry.add(ModelListenerReg::for_entity(
             DOCUMENTS,
             Arc::new(listener::DraftAuthor),
