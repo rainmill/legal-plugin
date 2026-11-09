@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Builds, lints and tests against the main branch of the framework and the PDF plugin, patched in
+# over crates.io, so a change there that breaks this plugin shows up here. The
+# release workflow tests against the published crates. The suite runs the
+# portable migrations on SQLite; the application workspace covers PostgreSQL.
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch in the main branches
+        run: |
+          git clone --depth 1 https://github.com/lateritecmf/laterite ../laterite
+          git clone --depth 1 https://github.com/rainmill/pdf-plugin ../pdf-plugin
+          mkdir -p .cargo
+          cat > .cargo/config.toml <<'EOF'
+          [patch.crates-io]
+          laterite-core = { path = "../laterite/crates/core" }
+          laterite-admin = { path = "../laterite/crates/admin" }
+          laterite-auth = { path = "../laterite/crates/auth" }
+          laterite-macros = { path = "../laterite/crates/macros" }
+          laterite-media = { path = "../laterite/crates/media" }
+          laterite-web = { path = "../laterite/crates/web" }
+          rainmill-pdf = { path = "../pdf-plugin" }
+          EOF
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
