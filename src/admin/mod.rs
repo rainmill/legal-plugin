@@ -529,15 +529,18 @@ async fn versions_page(cx: &Cx, id: i64, shell: Shell) -> Response {
                             t!("Render again"),
                             format!("{}/versions/{}/pdf", cx.tools(), v.id),
                         )
+                        .ghost()
                         .small()
+                        .icon("refresh-cw")
                         .render(&shell)
                         .into_string()
                     } else {
                         String::new()
                     };
                     format!(
-                        r#"<a href="{}" target="_blank" rel="noopener">{}</a> {again}"#,
+                        r#"<div class="rm-legal-pdf"><a class="lat-btn lat-btn--secondary lat-btn--sm" href="{}" target="_blank" rel="noopener"><span class="lat-btn__icon">{}</span>{}</a>{again}</div>"#,
                         escape(&laterite_admin::medialib::file_url(&rec)),
+                        shell.icon("file-text"),
                         escape(&shell.t("PDF"))
                     )
                 }
@@ -599,7 +602,8 @@ async fn versions_page(cx: &Cx, id: i64, shell: Shell) -> Response {
         shell.t("Versions"),
         doc.title
     )))
-    .back(t!("Back"), cx.edit(id));
+    .back(t!("Back"), cx.edit(id))
+    .assets(&[DIFF_CSS]);
     if shell.allows(PUBLISH) {
         head = head.actions(
             laterite_admin::ui::Button::link(

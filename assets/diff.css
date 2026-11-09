@@ -1,3 +1,5 @@
 .rm-legal-diff{white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--fs-13);line-height:1.6;color:var(--text-body);max-height:420px;overflow:auto}
 .rm-legal-diff del{background:var(--danger-subtle);color:var(--text-body);text-decoration:line-through}
 .rm-legal-diff ins{background:var(--success-subtle);color:var(--text-body);text-decoration:none}
+.rm-legal-pdf{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.rm-legal-pdf form{margin:0}
