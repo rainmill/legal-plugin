@@ -443,3 +443,294 @@ mod tests {
         assert!(in_force(&all, "2025-01-01T00:00:00Z").is_none());
     }
 }
+
+/// The acceptances table.
+pub const ACCEPTANCES: &str = "legal_acceptances";
+/// The notices table.
+pub const NOTICES: &str = "legal_notices";
+
+/// How a person accepted a version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Method {
+    /// Submitted a form that showed the document.
+    Form,
+    /// Clicked to accept it.
+    Click,
+    /// Brought in from elsewhere.
+    Import,
+}
+
+impl Method {
+    fn as_str(self) -> &'static str {
+        match self {
+            Method::Form => "form",
+            Method::Click => "click",
+            Method::Import => "import",
+        }
+    }
+}
+
+/// Who accepted: an entity name and its id (`("launch_signup", "42")`).
+pub type Subject<'a> = (&'a str, &'a str);
+
+/// Why an acceptance was not recorded.
+#[derive(Debug, thiserror::Error)]
+pub enum AcceptError {
+    /// No document has that address.
+    #[error("no legal document has the address {0}")]
+    NoDocument(String),
+    /// The document has no version in force.
+    #[error("{0} has no version in force")]
+    NothingInForce(String),
+    /// The database refused.
+    #[error(transparent)]
+    Db(#[from] sqlx::Error),
+}
+
+/// Records that `subject` accepted the version of document `slug` in force
+/// now, by `method`, with an `email` to tell them of later changes. Returns
+/// the version accepted: what a sign-up form should have shown.
+pub async fn accept(
+    db: &Db,
+    slug: &str,
+    subject: Subject<'_>,
+    method: Method,
+    email: Option<&str>,
+) -> Result<Version, AcceptError> {
+    let doc = document_by_slug(db, slug)
+        .await?
+        .ok_or_else(|| AcceptError::NoDocument(slug.to_string()))?;
+    let versions = versions(db, doc.id).await?;
+    let version = in_force(&versions, &now())
+        .cloned()
+        .ok_or_else(|| AcceptError::NothingInForce(slug.to_string()))?;
+    let email = email.map(str::trim).filter(|e| !e.is_empty());
+    let (sql, values) = build(
+        db.backend,
+        Query::insert()
+            .into_table(Alias::new(ACCEPTANCES))
+            .columns(
+                [
+                    "document_id",
+                    "version_id",
+                    "document_slug",
+                    "version_number",
+                    "subject_type",
+                    "subject_id",
+                    "email",
+                    "method",
+                    "accepted_at",
+                ]
+                .map(Alias::new),
+            )
+            .values_panic([
+                doc.id.into(),
+                version.id.into(),
+                doc.slug.clone().into(),
+                version.number.clone().into(),
+                subject.0.into(),
+                subject.1.into(),
+                email.map(str::to_string).into(),
+                method.as_str().into(),
+                now().into(),
+            ])
+            .to_owned(),
+    );
+    bind_values(sqlx::query(&sql), values)
+        .execute(&db.pool)
+        .await?;
+    Ok(version)
+}
+
+/// A person's latest acceptance of a document.
+#[derive(Debug, Clone)]
+pub struct Accepted {
+    /// The entity name.
+    pub subject_type: String,
+    /// The entity's id.
+    pub subject_id: String,
+    /// Where to tell them, if known.
+    pub email: Option<String>,
+    /// The version they accepted.
+    pub version_id: i64,
+    /// Its number.
+    pub version_number: String,
+}
+
+/// Everyone's latest acceptance of document `id`, one per subject.
+pub async fn latest_acceptances(db: &Db, id: i64) -> Result<Vec<Accepted>, sqlx::Error> {
+    let (sql, values) = build(
+        db.backend,
+        Query::select()
+            .columns(
+                [
+                    "subject_type",
+                    "subject_id",
+                    "email",
+                    "version_id",
+                    "version_number",
+                ]
+                .map(Alias::new),
+            )
+            .from(Alias::new(ACCEPTANCES))
+            .and_where(Expr::col(Alias::new("document_id")).eq(id))
+            .order_by(Alias::new("id"), Order::Asc)
+            .to_owned(),
+    );
+    let rows = bind_values(sqlx::query(&sql), values)
+        .fetch_all(&db.pool)
+        .await?;
+    // Later rows win: the latest acceptance per subject, its email kept from
+    // whichever acceptance last gave one.
+    let mut latest: Vec<Accepted> = Vec::new();
+    for r in &rows {
+        let text = |c: &str| r.get_text_opt(c).ok().flatten().filter(|s| !s.is_empty());
+        let row = Accepted {
+            subject_type: text("subject_type").unwrap_or_default(),
+            subject_id: text("subject_id").unwrap_or_default(),
+            email: text("email"),
+            version_id: r.get_int("version_id").unwrap_or_default(),
+            version_number: text("version_number").unwrap_or_default(),
+        };
+        match latest
+            .iter_mut()
+            .find(|a| a.subject_type == row.subject_type && a.subject_id == row.subject_id)
+        {
+            Some(a) => {
+                let email = row.email.clone().or(a.email.take());
+                *a = Accepted { email, ..row };
+            }
+            None => latest.push(row),
+        }
+    }
+    Ok(latest)
+}
+
+/// The people to tell about version `to`: those whose latest acceptance is of
+/// a version published before it.
+pub fn behind<'a>(latest: &'a [Accepted], versions: &[Version], to: &Version) -> Vec<&'a Accepted> {
+    let order = |id: i64| {
+        versions
+            .iter()
+            .find(|v| v.id == id)
+            .map(|v| (v.published_at.clone(), v.id))
+    };
+    let target = (to.published_at.clone(), to.id);
+    latest
+        .iter()
+        .filter(|a| order(a.version_id).is_some_and(|o| o < target))
+        .collect()
+}
+
+/// Records a notice: `status` queued (handed to the mail queue) or failed.
+#[allow(clippy::too_many_arguments)]
+pub async fn record_notice(
+    db: &Db,
+    doc: &Document,
+    to: &Version,
+    who: &Accepted,
+    email: &str,
+    status: &str,
+    error: Option<&str>,
+) -> Result<i64, sqlx::Error> {
+    let stmt = Query::insert()
+        .into_table(Alias::new(NOTICES))
+        .columns(
+            [
+                "document_id",
+                "to_version_id",
+                "document_slug",
+                "from_number",
+                "to_number",
+                "subject_type",
+                "subject_id",
+                "email",
+                "status",
+                "attempts",
+                "last_error",
+                "created_at",
+                "updated_at",
+            ]
+            .map(Alias::new),
+        )
+        .values_panic([
+            doc.id.into(),
+            to.id.into(),
+            doc.slug.clone().into(),
+            who.version_number.clone().into(),
+            to.number.clone().into(),
+            who.subject_type.clone().into(),
+            who.subject_id.clone().into(),
+            email.into(),
+            status.into(),
+            1i32.into(),
+            error.map(str::to_string).into(),
+            now().into(),
+            now().into(),
+        ])
+        .to_owned();
+    insert_returning_id(db, stmt, Alias::new("id")).await
+}
+
+/// A notice that could not be handed to the mail queue.
+#[derive(Debug, Clone)]
+pub struct FailedNotice {
+    /// The row id.
+    pub id: i64,
+    /// The version it announces.
+    pub to_version_id: i64,
+    /// The address.
+    pub email: String,
+    /// The version the person had accepted.
+    pub from_number: String,
+}
+
+/// The failed notices of document `id`.
+pub async fn failed_notices(db: &Db, id: i64) -> Result<Vec<FailedNotice>, sqlx::Error> {
+    let (sql, values) = build(
+        db.backend,
+        Query::select()
+            .columns(["id", "to_version_id", "email", "from_number"].map(Alias::new))
+            .from(Alias::new(NOTICES))
+            .and_where(Expr::col(Alias::new("document_id")).eq(id))
+            .and_where(Expr::col(Alias::new("status")).eq("failed"))
+            .to_owned(),
+    );
+    let rows = bind_values(sqlx::query(&sql), values)
+        .fetch_all(&db.pool)
+        .await?;
+    Ok(rows
+        .iter()
+        .map(|r| FailedNotice {
+            id: r.get_int("id").unwrap_or_default(),
+            to_version_id: r.get_int("to_version_id").unwrap_or_default(),
+            email: r.get_text("email").unwrap_or_default(),
+            from_number: r.get_text("from_number").unwrap_or_default(),
+        })
+        .collect())
+}
+
+/// Marks a retried notice: queued again, or failed with `error`, one more attempt.
+pub async fn retried(db: &Db, id: i64, error: Option<&str>) -> Result<(), sqlx::Error> {
+    let (sql, values) = build(
+        db.backend,
+        Query::update()
+            .table(Alias::new(NOTICES))
+            .value(
+                Alias::new("status"),
+                if error.is_some() { "failed" } else { "queued" },
+            )
+            .value(Alias::new("last_error"), error.map(str::to_string))
+            .value(
+                Alias::new("attempts"),
+                Expr::col(Alias::new("attempts")).add(1),
+            )
+            .value(Alias::new("updated_at"), now())
+            .and_where(Expr::col(Alias::new("id")).eq(id))
+            .to_owned(),
+    );
+    bind_values(sqlx::query(&sql), values)
+        .execute(&db.pool)
+        .await?;
+    Ok(())
+}

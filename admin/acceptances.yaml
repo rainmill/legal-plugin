@@ -1,0 +1,17 @@
+entity: legal_acceptances
+path: /acceptances
+title: Acceptances
+permission: rainmill.legal.edit
+menu: { under: rainmill.legal, order: 2 }
+list:
+  exportable: true
+  order_by: accepted_at
+  search: { prompt: Search by person or email }
+  columns:
+    document_slug: { label: Document }
+    version_number: { label: Version }
+    subject_type: { label: Kind }
+    subject_id: { label: Id, searchable: true }
+    email: { searchable: true }
+    method: {}
+    accepted_at: { type: datetime, label: Accepted }

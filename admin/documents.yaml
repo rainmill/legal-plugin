@@ -18,6 +18,7 @@ form:
   actions:
     - { label: Versions, action: "rainmill/legal/tools/documents/{id}/versions", method: get }
     - { label: Publish new version, action: "rainmill/legal/tools/documents/{id}/publish", method: get, permission: rainmill.legal.publish }
+    - { label: Send changes, action: "rainmill/legal/tools/documents/{id}/notify", method: get, permission: rainmill.legal.notify }
   fields:
     title: { span: 1/2, rules: [required, { max_length: 160 }] }
     slug: { span: 1/4, label: Address, rules: [required, { max_length: 80 }], help: 'Such as privacy; the page and code refer to it.' }

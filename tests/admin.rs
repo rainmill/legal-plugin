@@ -316,3 +316,120 @@ async fn an_editor_without_the_publish_grant_cannot_publish() {
     assert!(store::versions(&db, doc.id).await.unwrap().is_empty());
     let _ = std::fs::remove_dir_all(storage);
 }
+
+#[tokio::test]
+async fn acceptances_record_the_version_in_force_and_changes_reach_those_behind() {
+    use rainmill_legal::{accept, AcceptError, Method};
+    let (db, _guard, app, storage) = setup().await;
+    let root = session(&db, "root", &[]).await;
+    send(
+        &app,
+        post(
+            &format!("/admin{BASE}/documents/new"),
+            &root,
+            "title=Privacy+Policy&slug=privacy&numbering=major_minor&body=Version+one.",
+        ),
+    )
+    .await;
+    let doc = store::document_by_slug(&db, "privacy")
+        .await
+        .unwrap()
+        .unwrap();
+
+    let none = accept(&db, "privacy", ("launch_signup", "1"), Method::Form, None).await;
+    assert!(
+        matches!(none, Err(AcceptError::NothingInForce(_))),
+        "nothing published yet"
+    );
+
+    let publish = format!("/admin{BASE}/tools/documents/{}/publish", doc.id);
+    send(
+        &app,
+        post(
+            &publish,
+            &root,
+            "effective=2026-01-01&summary=First+version",
+        ),
+    )
+    .await;
+    let v1 = accept(
+        &db,
+        "privacy",
+        ("launch_signup", "1"),
+        Method::Form,
+        Some("ada@acme.test"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(v1.number, "1.0");
+    accept(&db, "privacy", ("launch_signup", "2"), Method::Form, None)
+        .await
+        .unwrap();
+
+    send(
+        &app,
+        post(
+            &format!("/admin{BASE}/documents/{}/edit", doc.id),
+            &root,
+            "title=Privacy+Policy&slug=privacy&numbering=major_minor&body=Version+two.",
+        ),
+    )
+    .await;
+    send(
+        &app,
+        post(
+            &publish,
+            &root,
+            "effective=2026-02-01&summary=We+now+keep+your+email&material=on",
+        ),
+    )
+    .await;
+    // Someone who already accepted 2.0 is not behind.
+    accept(
+        &db,
+        "privacy",
+        ("launch_signup", "3"),
+        Method::Click,
+        Some("cy@acme.test"),
+    )
+    .await
+    .unwrap();
+
+    let notify = format!("/admin{BASE}/tools/documents/{}/notify", doc.id);
+    let (status, _, html) = send(&app, get(&notify, &root)).await;
+    assert_eq!(status, StatusCode::OK);
+    let html = String::from_utf8_lossy(&html);
+    assert!(
+        html.contains("2 behind version 2.0: 1 with an email, 1 without."),
+        "{html}"
+    );
+    assert!(
+        html.contains("We now keep your email") && html.contains("/legal/privacy/compare/1.0/2.0")
+    );
+
+    let (status, _, _) = send(&app, post(&notify, &root, "to=2.0")).await;
+    assert!(status.is_redirection(), "{status}");
+    let (sql, values) = laterite_core::query::build(
+        db.backend,
+        sea_query::Query::select()
+            .columns(["email", "status", "from_number", "to_number"].map(sea_query::Alias::new))
+            .from(sea_query::Alias::new("legal_notices"))
+            .to_owned(),
+    );
+    let rows = laterite_core::query::bind_values(sqlx::query(&sql), values)
+        .fetch_all(&db.pool)
+        .await
+        .unwrap();
+    use laterite_core::AnyRowExt;
+    assert_eq!(rows.len(), 1, "only the person behind with an email");
+    assert_eq!(rows[0].get_text("email").unwrap(), "ada@acme.test");
+    assert_eq!(rows[0].get_text("status").unwrap(), "queued");
+    assert_eq!(rows[0].get_text("from_number").unwrap(), "1.0");
+
+    let (status, _, html) = send(&app, get(&format!("/admin{BASE}/notices"), &root)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(String::from_utf8_lossy(&html).contains("ada@acme.test"));
+    let (status, _, _) = send(&app, get(&format!("/admin{BASE}/acceptances"), &root)).await;
+    assert_eq!(status, StatusCode::OK);
+    let _ = std::fs::remove_dir_all(storage);
+}

@@ -10,6 +10,7 @@
 pub mod admin;
 mod listener;
 pub mod migrations;
+mod notify;
 mod site;
 pub mod store;
 
@@ -22,6 +23,8 @@ use laterite_core::{MigrationSet, ModelListenerReg, Module, ModuleId, Registry};
 pub const DOCUMENTS: &str = "legal_documents";
 /// The versions table.
 pub const VERSIONS: &str = "legal_versions";
+
+pub use store::{accept, AcceptError, Method};
 
 /// This plugin's entry point, collected by the generated plugins manifest.
 pub fn module() -> Box<dyn Module> {

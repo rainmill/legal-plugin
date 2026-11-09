@@ -43,7 +43,11 @@ pub(crate) fn section() -> laterite_admin::nav::NavItem {
 }
 
 pub(crate) fn resources() -> Vec<Resource> {
-    vec![laterite_admin::resource!("admin/documents.yaml")]
+    vec![
+        laterite_admin::resource!("admin/documents.yaml"),
+        laterite_admin::resource!("admin/acceptances.yaml"),
+        laterite_admin::resource!("admin/notices.yaml"),
+    ]
 }
 
 pub(crate) fn screen() -> ScreenReg {
@@ -112,6 +116,50 @@ impl Screen for Tools {
             cx.clone(),
             cx.clone(),
         );
+        let (notify_page_cx, notify_cx, retry_cx) = (cx.clone(), cx.clone(), cx.clone());
+        let notifying = Router::new()
+            .route(
+                "/documents/{id}/notify",
+                get(
+                    move |Path(id): Path<i64>,
+                          Extension(shell): Extension<Shell>,
+                          laterite_admin::axum::extract::Query(q): laterite_admin::axum::extract::Query<HashMap<String, String>>| {
+                        let cx = notify_page_cx.clone();
+                        async move { crate::notify::page(&cx.ctx, &cx.tools(), id, shell, &q).await }
+                    },
+                )
+                .post(
+                    move |Path(id): Path<i64>,
+                          Extension(user): Extension<AuthenticatedUser>,
+                          Extension(session): Extension<SessionHandle>,
+                          headers: HeaderMap,
+                          Form(form): Form<HashMap<String, String>>| {
+                        let cx = notify_cx.clone();
+                        async move {
+                            match crate::notify::send(&cx.ctx, id, &user, &session, &form).await {
+                                Ok(()) => redirect(format!("{}/rainmill/legal/notices", cx.admin()), &headers),
+                                Err(r) => *r,
+                            }
+                        }
+                    },
+                ),
+            )
+            .route(
+                "/documents/{id}/notify/retry",
+                post(
+                    move |Path(id): Path<i64>,
+                          Extension(session): Extension<SessionHandle>,
+                          headers: HeaderMap,
+                          Form(form): Form<HashMap<String, String>>| {
+                        let cx = retry_cx.clone();
+                        async move {
+                            crate::notify::retry(&cx.ctx, id, &session, &form).await;
+                            redirect(format!("{}/rainmill/legal/notices", cx.admin()), &headers)
+                        }
+                    },
+                ),
+            )
+            .route_layer(laterite_admin::axum::middleware::from_fn(guarded(NOTIFY)));
         let publishing = Router::new()
             .route(
                 "/documents/{id}/publish",
@@ -163,6 +211,7 @@ impl Screen for Tools {
                 ),
             )
             .merge(publishing)
+            .merge(notifying)
     }
 }
 

@@ -85,11 +85,45 @@ none | The version in force, with its PDF link
 
 The history lists every version newest first, marking the one in force and any scheduled for later. The data is `component.document`, `.version` (number, effective, summary, html, pdf), `.history`, `.compare` (from, to, html, changes) and `.missing` (a version the URL named that does not exist), for a theme that writes its own markup.
 
+## Acceptances
+
+A form that shows a document records that the person accepted the version in force:
+
+```rust
+use rainmill_legal::{accept, Method};
+
+let version = accept(&db, "privacy", ("launch_signup", &id.to_string()), Method::Form, email).await?;
+```
+
+Case | Result
+--- | ---
+A version is in force | An acceptance row (document, version and its number, the subject, email, method, time); the version is returned.
+No document has the address | `AcceptError::NoDocument`.
+Nothing is in force yet | `AcceptError::NothingInForce`.
+
+**Acceptances** in the admin lists every row, searchable and exportable.
+
+## Sending the changes
+
+**Send changes** on a document picks a version to announce (the latest material one by default) and finds everyone whose latest acceptance is of an older version. It counts those with and without an email, previews the message (each change's summary since the person's version, and a link to the public compare page), and sends one message per person through the application's mail queue.
+
+Case | Result
+--- | ---
+Handed to the mail queue | A notice, `queued`; the mail log shows the delivery, and the Jobs list holds a message that finally failed, with Retry.
+The queue refused it | A notice, `failed`, with the error; **Retry failed** on Send changes hands those to the queue again.
+No email on record | Counted on the page, never sent; the public compare page shows them the changes.
+
+**Notices** in the admin lists every notice with its status, attempts and last error. Each send writes an audit entry (`rainmill.legal.notify`).
+
+Compare page address | Default
+--- | ---
+The link in each message | `{base}/legal/{slug}/compare/{from}/{to}`, editable on the page
+
 Permission | Allows
 --- | ---
-`rainmill.legal.edit` | Opening documents and saving drafts
+`rainmill.legal.edit` | Opening documents, saving drafts, and the acceptances list
 `rainmill.legal.publish` | Publishing a version and rendering its PDF again
-`rainmill.legal.notify` | Sending the changes between versions (coming)
+`rainmill.legal.notify` | Sending the changes and the notices list
 
 ## Licence
 

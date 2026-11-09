@@ -1,0 +1,18 @@
+entity: legal_notices
+path: /notices
+title: Notices
+permission: rainmill.legal.notify
+menu: { under: rainmill.legal, order: 3 }
+list:
+  exportable: true
+  order_by: created_at
+  search: { prompt: Search by email }
+  columns:
+    document_slug: { label: Document }
+    from_number: { label: From }
+    to_number: { label: To }
+    email: { searchable: true }
+    status: { labels: [{ value: queued, label: Queued }, { value: failed, label: Failed }] }
+    attempts: {}
+    last_error: { label: Error }
+    updated_at: { type: datetime, label: Last tried }
