@@ -8,6 +8,7 @@
 //! is where delivery shows. Anyone with no email on record is counted on the
 //! page, to be reached another way; the compare page is public for that.
 
+use laterite_core::sqlx;
 use std::collections::HashMap;
 
 use laterite_admin::axum::http::StatusCode;

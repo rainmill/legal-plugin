@@ -2,6 +2,8 @@
 //! the next number in a document's scheme, and publishing a draft.
 
 use laterite_core::query::{bind_values, build, insert_returning_id};
+use laterite_core::sea_query;
+use laterite_core::sqlx;
 use laterite_core::{AnyRowExt, Db};
 use sea_query::{Alias, Expr, Order, Query};
 

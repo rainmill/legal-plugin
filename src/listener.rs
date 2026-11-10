@@ -2,6 +2,7 @@
 //! and its state joins the draft history.
 
 use laterite_core::query::bind_values;
+use laterite_core::sqlx;
 use laterite_core::strata::async_trait;
 use laterite_core::{ErrorBag, ModelListener, Op, Record, SaveCx, SavedCx, Text};
 

@@ -1,6 +1,7 @@
 //! legal_acceptances and legal_notices: who accepted which version, and each
 //! message telling someone what changed.
 
+use laterite_core::sea_query;
 use laterite_core::strata::*;
 use sea_query::Alias;
 

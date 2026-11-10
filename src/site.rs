@@ -8,6 +8,8 @@
 //! sections by heading, for an "On this page" list. A theme gives them whatever URL
 //! shape it likes: `/legal/:slug/:version?`, `/legal/:slug/compare/:from/:to`.
 
+use laterite_core::serde_json;
+use laterite_core::sqlx;
 use laterite_web::theme::component::{
     Component, ComponentContext, ComponentOutput, PropertyDef, PropertyKind,
 };

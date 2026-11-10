@@ -3,6 +3,8 @@
 //! are recorded as states of their own, so nothing is ever lost by using them.
 
 use laterite_core::query::{bind_values, build};
+use laterite_core::sea_query;
+use laterite_core::sqlx;
 use laterite_core::{AnyRowExt, Db, DbBackend};
 use sea_query::{Alias, Expr, Order, Query};
 use sqlx::AnyConnection;

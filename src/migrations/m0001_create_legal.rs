@@ -1,6 +1,7 @@
 //! legal_documents and legal_versions: a document's draft, and the versions
 //! published from it, each immutable once written.
 
+use laterite_core::sea_query;
 use laterite_core::strata::*;
 use sea_query::Alias;
 

@@ -1,6 +1,7 @@
 //! legal_draft_revisions: a document's draft after each save, private to the
 //! admin, for its draft history, Restore and Undo.
 
+use laterite_core::sea_query;
 use laterite_core::strata::*;
 use sea_query::Alias;
 

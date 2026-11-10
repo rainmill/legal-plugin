@@ -2,6 +2,8 @@
 //! version published with its scheme's number and stored PDF, an unchanged
 //! draft refused, and publishing kept from an operator who may only edit.
 
+use laterite_core::sea_query;
+use laterite_core::sqlx;
 use std::sync::Arc;
 
 use laterite_admin::axum::body::Body;

@@ -2,6 +2,10 @@
 //! and what changed between two versions or two dates, through its default
 //! markup.
 
+use laterite_core::minijinja;
+use laterite_core::sea_query;
+use laterite_core::serde_json;
+use laterite_core::sqlx;
 use std::collections::BTreeMap;
 
 use laterite_core::{Module, Registry};
