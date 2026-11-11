@@ -7,6 +7,12 @@ bump is breaking and a patch is additive.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-11
+
+### Breaking
+
+- Requires Laterite 0.11 and `rainmill-pdf` 0.2.
+
 ## [0.1.0] - 2026-11-10
 
 ### Added

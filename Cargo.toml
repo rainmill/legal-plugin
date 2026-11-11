@@ -1,6 +1,6 @@
 [package]
 name = "rainmill-legal"
-version = "0.1.0"
+version = "0.2.0"
 description = "Versioned legal documents for Laterite: drafts with undo, published versions with archival PDFs, public history and diffs, acceptances and change notices"
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -16,7 +16,7 @@ plugin = "rainmill.legal"
 laterite-core = "0.11"
 laterite-admin = "0.11"
 # PDFs of drafts and published versions, set in a PDF layout.
-rainmill-pdf = "0.1"
+rainmill-pdf = "0.2"
 # A version's stored PDF is a media record linked to it.
 laterite-media = "0.11"
 # The site component that shows a document, its history and its changes.
