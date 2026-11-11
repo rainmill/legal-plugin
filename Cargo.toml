@@ -13,14 +13,14 @@ plugin = "rainmill.legal"
 [dependencies]
 # Laterite crates are version-only; the building workspace patches them to the
 # local checkout until Laterite publishes.
-laterite-core = "0.10"
-laterite-admin = "0.10"
+laterite-core = "0.11"
+laterite-admin = "0.11"
 # PDFs of drafts and published versions, set in a PDF layout.
 rainmill-pdf = "0.1"
 # A version's stored PDF is a media record linked to it.
-laterite-media = "0.10"
+laterite-media = "0.11"
 # The site component that shows a document, its history and its changes.
-laterite-web = "0.10"
+laterite-web = "0.11"
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
@@ -28,8 +28,8 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 blake3 = "1"
 
 [dev-dependencies]
-laterite-core = { version = "0.10", features = ["sqlite", "postgres", "testing"] }
-laterite-auth = "0.10"
+laterite-core = { version = "0.11", features = ["sqlite", "postgres", "testing"] }
+laterite-auth = "0.11"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tower = { version = "0.5", features = ["util"] }
 lopdf = { version = "0.47", default-features = false }
