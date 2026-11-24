@@ -41,7 +41,9 @@ pub(crate) fn permissions() -> Vec<Permission> {
 }
 
 pub(crate) fn section() -> laterite_admin::nav::NavItem {
-    laterite_admin::nav::NavItem::section(SECTION, t!("Legal")).icon("scale")
+    laterite_admin::nav::NavItem::section(SECTION, t!("Legal"))
+        .icon("scale")
+        .description(t!("Terms, privacy policy and who accepted each version."))
 }
 
 pub(crate) fn resources() -> Vec<Resource> {

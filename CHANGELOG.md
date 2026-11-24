@@ -7,6 +7,10 @@ bump is breaking and a patch is additive.
 
 ## [Unreleased]
 
+### Added
+
+- The Legal section carries a description, shown when an application places it in Settings.
+
 ## [0.2.0] - 2026-11-11
 
 ### Breaking
